@@ -1,0 +1,234 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+# Exploratory Data Analysis
+
+## Project Overview
+
+This project demonstrates the process of exploratory data analysis (EDA) using R functions and visualization tools. It is an individual effort project aimed at understanding and analyzing a dataset sourced from public repositories. The project involves data cleaning, exploration, visualization, and drawing insights from the data.
+
+### Specified Dataset
+
+- **Description:**
+  - The dataset contains information about accidents and injuries in the United States spanning 15 years.
+  - It includes various attributes such as the location of the accident, body part injured, severity of the injury, and more.
+
+- **Download Links:**
+  - [US Accident Injury Dataset (.csv)](https://github.com/kmgUWA/EDA/blob/main/us_data_2000.csv)
+  - [Data Dictionary (.csv)](https://github.com/kmgUWA/EDA/blob/main/clean_data_dictionary.csv)
+
+
+
+```{r, message=FALSE}
+# Load required libraries
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(forcats)
+library(plotly)
+```
+
+
+```{r}
+
+# set the the plot theme
+us_data_theme <- theme(legend.text = element_text(size = 6),plot.title = element_text(size = 6),legend.title = element_text(size = 6),axis.title.y = element_text(size = 7),axis.title.x = element_text(size = 7),axis.text.y = element_text(size = 6),axis.text.x = element_text(size = 6),)
+
+us_data_df <- read.csv("us_data_2000.csv")
+# inspect the data
+glimpse(us_data_df)
+```
+From the above summary we can see that there are 57 variables and 2000 observations.Now we will check the blank/NA values for all the variables.
+
+
+```{r}
+apply(is.na(us_data_df), 2, sum)
+```
+From the above result we can see that some of the variables have large number of blank/NA values, we will clean this data further.We will ignore the not required columns for our EDA process. Now we will check the individual column and change the corresponding values for the column as per the values described in the given data dictionary file,this will help us to understand the meaning of data correctly. For e.g. COAL_METAL_IND is the variable which has the two categories “M” and “c” which represents the values coal mine and Metal Non Metal mine.we will rename the values for “M and”C” as per the given data dictionary.
+
+```{r}
+us_data_df$COAL_METAL_IND[us_data_df$COAL_METAL_IND == 'C'] <- 'Coal Mine'
+ us_data_df$COAL_METAL_IND[us_data_df$COAL_METAL_IND == 'M'] <- 'Metal Non Metal Mine'
+
+us_data_df %>%
+  pull(COAL_METAL_IND) %>%
+unique()
+
+
+```
+
+```{r}
+# Analyze the total no. of injuries for the mine categories for the Fiscal year
+# Line plot with multiple groups
+# Grouping data and calculating total injuries
+df_grp_mine_injuries <- us_data_df %>% 
+  group_by(FISCAL_YR, COAL_METAL_IND) %>%
+  summarise(Total_injuries = sum(NO_INJURIES), .groups = 'drop')
+
+# Plotting
+p <- ggplot(data = df_grp_mine_injuries, aes(x = FISCAL_YR, y = Total_injuries, color = COAL_METAL_IND, group = COAL_METAL_IND, text = paste("Fiscal Year:", FISCAL_YR, "<br> Mine Category:", COAL_METAL_IND, "<br> Total Injuries:", Total_injuries))) +
+  geom_line() +
+  geom_point() + 
+  ggtitle("Total Injuries by Mine Category Over Fiscal Years") +
+  xlab("Fiscal Year") +
+  ylab("Total Injuries") +
+  scale_color_manual(values = c("#2E86C1", "#f68060")) +  # Customizing line colors
+  us_data_theme +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5, vjust = 1.5),
+    axis.text = element_text(size = 8),
+    axis.title = element_text(size = 10)
+  )
+
+# Convert ggplot to plotly
+p <- ggplotly(p, tooltip = "text")
+
+p
+```
+**Total Injuries by Mine Category Over Fiscal Years (Line Plot):**
+
+- The line plot shows the total injuries over fiscal years for two categories of mines: Coal Mine and Metal Non Metal Mine.
+- Coal mines consistently have higher injury rates compared to metal non-metal mines throughout the years.
+- The tooltip allows for easy comparison of injury counts between mine categories for each fiscal year.
+- From the above plot we can see that the total no. of injuries for coal and metal non metal mines were at the peak in the year 2000, but the number started decreasing in the following years and in 2015 the injuries occurred in the mines are extremely low.
+```{r}
+# Analyze the total injuries based on the location
+# bar plot
+
+
+# Grouping data and calculating total injuries
+df_grp_mine_injuries <- us_data_df %>% 
+  group_by(INJ_BODY_PART) %>%
+  summarise(Total_injuries = sum(NO_INJURIES), .groups = 'drop')
+
+# Reordering factor levels by total injuries
+df <- df_grp_mine_injuries %>%
+  mutate(INJ_BODY_PART = fct_reorder(INJ_BODY_PART, Total_injuries))
+
+# Plotting
+p <- ggplot(df, aes(x = INJ_BODY_PART, y = Total_injuries, text = paste("Body Part: ", INJ_BODY_PART, "<br>Total Injuries: ", Total_injuries))) +
+  geom_bar(stat = "identity", fill = "#2E86C1", alpha = 0.9, width = 0.4) +
+  coord_flip() +
+  xlab("Injured Body Part") +
+  ylab("Total Injuries") +
+  ggtitle("Count of Injuries by Body Part") +
+  us_data_theme +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5, vjust = 1.5),
+    axis.text = element_text(size = 8),
+    axis.title = element_text(size = 10)
+  )
+
+# Convert ggplot to plotly
+p <- ggplotly(p, tooltip = "text")
+
+p
+```
+**Count of Injuries by Body Part (Bar Plot with Tooltip):**
+
+- The bar plot displays the total injuries grouped by the injured body part.
+- The tooltip shows the body part and the corresponding total injuries when hovering over each bar.
+- It's evident that the most common injuries occur in the back,and fingers.
+
+
+
+
+```{r}
+# Replace 'NO VALUE FOUND' with 'unknown' in UG_MINING_METHOD
+us_data_df$UG_MINING_METHOD[us_data_df$UG_MINING_METHOD == 'NO VALUE FOUND'] <- 'unknown'
+
+# Grouping data and calculating total injuries
+df_grp_mine_injuries <- us_data_df %>% 
+  group_by(FISCAL_YR, UG_MINING_METHOD) %>%
+  summarise(Total_injuries = sum(NO_INJURIES), .groups = 'drop')
+
+# Arrange data by fiscal year
+df_grp_mine_injuries <- df_grp_mine_injuries %>% 
+  arrange(FISCAL_YR)
+
+# Plotting
+p <- ggplot(df_grp_mine_injuries, aes(x = FISCAL_YR, y = Total_injuries, fill = UG_MINING_METHOD, text = paste("Mining Method: ", UG_MINING_METHOD, "<br> Fiscal Year: ", FISCAL_YR, "<br> Total Injuries: ", Total_injuries))) +
+  geom_col(position = "stack") +
+  ggtitle("Stacked Area Plot for Underground Mining Methods") +
+  xlab("Fiscal Year") +
+  ylab("Total Injuries") +
+  us_data_theme +
+  theme(
+    plot.title = element_text(size = 10, hjust = 0.5, vjust = 4),
+    legend.key.height = unit(0.3, 'cm'),
+    legend.key.width = unit(0.4, 'cm')
+  )
+
+# Convert ggplot to plotly
+p <- ggplotly(p, tooltip = "text")
+
+p
+```
+**Stacked Area Plot for Underground Mining Methods:**
+
+- The stacked area plot illustrates the total injuries over fiscal years for different underground mining methods.
+- The tooltip provides information about the mining method, fiscal year, and total injuries when hovering over each area.
+- It shows the trends in injuries for each mining method over time.
+
+
+
+
+
+```{r}
+# Grouping data and calculating total injuries
+df_grp_mine_injuries <- us_data_df %>% 
+  group_by(CAL_QTR, COAL_METAL_IND) %>%
+  summarise(Total_injuries = sum(NO_INJURIES), .groups = 'drop')
+
+# Plotting
+p <- ggplot(df_grp_mine_injuries, aes(x = CAL_QTR, y = Total_injuries, fill = COAL_METAL_IND, text = paste("Mine Type: ", COAL_METAL_IND, "<br>Calendar Quarter: ", CAL_QTR, "<br>Total Injuries: ", Total_injuries))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  ggtitle("Total Injuries by Mine Type per Calendar Quarter") +
+  xlab("Calendar Quarter") +
+  ylab("Total Injuries") +
+  us_data_theme +
+  theme(plot.title = element_text(size = 10, hjust = 0.5, vjust = 4))
+
+# Convert ggplot to plotly
+p <- ggplotly(p, tooltip = "text")
+
+p
+```
+**Total Injuries by Mine Type per Calendar Quarter (Grouped Bar Plot with Tooltip):**
+
+- The grouped bar plot shows the total injuries for coal mines and metal non-metal mines per calendar quarter.
+- The tooltip displays the mine type, calendar quarter, and total injuries when hovering over each bar.
+- It allows for comparison of injury counts between mine types for each calendar quarter.
+- We can see from above graph that metal non-metal mines have high injuries compare to coal mines
+```{r}
+# Grouping data and calculating the count of injured employees
+df_trans_term <- us_data_df %>% 
+  group_by(FISCAL_YR, TRANS_TERM) %>%
+  summarise(count = n(), .groups = 'drop')
+
+# Mapping TRANS_TERM values to labels
+df_trans_term$TRANS_TERM <- ifelse(df_trans_term$TRANS_TERM == "Y", "Terminated/Transferred", 
+                                   ifelse(df_trans_term$TRANS_TERM == "N", "Not Terminated/Transferred", "Unknown"))
+
+# Plotting as a scatter plot with tooltips
+p <- ggplot(data = df_trans_term, aes(x = FISCAL_YR, y = count, color = TRANS_TERM, text = paste("Status: ", TRANS_TERM, "<br>Fiscal Year: ", FISCAL_YR, "<br>Count: ", count))) +
+  geom_point() + # Points and color by group
+  ggtitle("Analyse the status of the injured employee per Fiscal year") +
+  us_data_theme +
+  theme(plot.title = element_text(size = 10, hjust = 0.5, vjust = 4))
+
+# Convert ggplot to plotly with tooltips
+p <- ggplotly(p, tooltip = "text")
+p
+
+```
+**Analyzing Injured Employee Status per Fiscal Year:**
+
+- There are more instances of injured employees who were not terminated or transferred compared to those who were terminated or transferred.
+- Both categories (terminated/not terminated) show variations over the years, indicating changes in workplace safety measures or reporting practices.
+
+
+
